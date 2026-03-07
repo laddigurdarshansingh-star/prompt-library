@@ -556,6 +556,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
             let _ = fs::create_dir_all(&app_data_dir);
@@ -617,6 +618,19 @@ pub fn run() {
                         open_quicksave_window(&app_handle);
                     }
                 });
+            }
+
+            // ─── Autostart: enable and hide on boot ───
+            use tauri_plugin_autostart::ManagerExt;
+            let autostart_manager = app.autolaunch();
+            let _ = autostart_manager.enable();
+
+            // If launched with --autostart flag, hide the main window
+            let args: Vec<String> = std::env::args().collect();
+            if args.iter().any(|a| a == "--autostart") {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
             }
 
             Ok(())
