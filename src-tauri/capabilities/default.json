@@ -1,8 +1,9 @@
 {
     "identifier": "default",
-    "description": "Capability for the main window",
+    "description": "Capability for the main and quicksave windows",
     "windows": [
-        "main"
+        "main",
+        "quicksave"
     ],
     "permissions": [
         "core:default",
@@ -15,6 +16,11 @@
         "dialog:allow-open",
         "fs:default",
         "shell:default",
-        "shell:allow-open"
+        "shell:allow-open",
+        "global-shortcut:default",
+        "global-shortcut:allow-register",
+        "global-shortcut:allow-unregister",
+        "global-shortcut:allow-unregister-all",
+        "global-shortcut:allow-is-registered"
     ]
 }

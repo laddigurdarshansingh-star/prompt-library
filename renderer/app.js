@@ -487,11 +487,113 @@ $('#winMinimize').addEventListener('click', () => invoke('window_minimize'));
 $('#winMaximize').addEventListener('click', () => invoke('window_maximize'));
 $('#winClose').addEventListener('click', () => invoke('window_close'));
 
+// ─── Settings Panel ─────────────────────────────────────────────
+const settingsOverlay = $('#settingsOverlay');
+const shortcutDisplay = $('#shortcutDisplay');
+const shortcutRecorder = $('#shortcutRecorder');
+const recorderKeys = $('#recorderKeys');
+let isRecording = false;
+let recordedShortcut = '';
+
+$('#settingsBtn').addEventListener('click', async () => {
+    const settings = await invoke('get_settings');
+    if (settings) {
+        shortcutDisplay.textContent = settings.shortcut || 'CmdOrCtrl+Shift+S';
+    }
+    settingsOverlay.classList.add('active');
+});
+
+$('#settingsClose').addEventListener('click', () => {
+    settingsOverlay.classList.remove('active');
+    stopRecording();
+});
+
+settingsOverlay.addEventListener('click', (e) => {
+    if (e.target === settingsOverlay) {
+        settingsOverlay.classList.remove('active');
+        stopRecording();
+    }
+});
+
+$('#shortcutRecordBtn').addEventListener('click', () => {
+    shortcutRecorder.style.display = 'flex';
+    isRecording = true;
+    recordedShortcut = '';
+    recorderKeys.textContent = 'Waiting...';
+});
+
+$('#recorderCancel').addEventListener('click', () => {
+    stopRecording();
+});
+
+$('#recorderSave').addEventListener('click', async () => {
+    if (!recordedShortcut) return;
+    try {
+        await invoke('set_shortcut', { shortcut: recordedShortcut });
+        shortcutDisplay.textContent = recordedShortcut;
+        showToast('Shortcut updated!');
+    } catch (e) {
+        showToast('Invalid shortcut: ' + e);
+    }
+    stopRecording();
+});
+
+function stopRecording() {
+    isRecording = false;
+    shortcutRecorder.style.display = 'none';
+    recordedShortcut = '';
+}
+
+document.addEventListener('keydown', (e) => {
+    if (!isRecording) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Build the shortcut string in Tauri format
+    const parts = [];
+    if (e.ctrlKey || e.metaKey) parts.push('CmdOrCtrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+
+    // Map the actual key
+    const key = e.key;
+    const ignoredKeys = ['Control', 'Meta', 'Alt', 'Shift'];
+    if (ignoredKeys.includes(key)) {
+        recorderKeys.textContent = parts.join('+') + '+...';
+        return;
+    }
+
+    // Map special keys
+    const keyMap = {
+        ' ': 'Space',
+        'ArrowUp': 'Up',
+        'ArrowDown': 'Down',
+        'ArrowLeft': 'Left',
+        'ArrowRight': 'Right',
+        'Enter': 'Enter',
+        'Backspace': 'Backspace',
+        'Delete': 'Delete',
+        'Tab': 'Tab',
+        'Escape': 'Escape',
+    };
+
+    const mappedKey = keyMap[key] || key.toUpperCase();
+    parts.push(mappedKey);
+
+    recordedShortcut = parts.join('+');
+    recorderKeys.textContent = recordedShortcut;
+}, true);
+
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    // Escape closes modal and lightbox
+    if (isRecording) return; // Don't process normal shortcuts while recording
+
+    // Escape closes overlays
     if (e.key === 'Escape') {
-        if (lightboxOverlay.classList.contains('active')) {
+        if (settingsOverlay.classList.contains('active')) {
+            settingsOverlay.classList.remove('active');
+            stopRecording();
+        } else if (lightboxOverlay.classList.contains('active')) {
             closeLightbox();
         } else if (modalOverlay.classList.contains('active')) {
             closeModal();
@@ -523,8 +625,8 @@ document.addEventListener('keydown', (e) => {
 // ─── Init ──────────────────────────────────────────────────────
 async function init() {
     folders = await invoke('get_folders');
-    const theme = await invoke('get_theme');
-    document.documentElement.setAttribute('data-theme', theme || 'dark');
+    const settings = await invoke('get_settings');
+    document.documentElement.setAttribute('data-theme', settings?.theme || 'dark');
 
     if (folders.length > 0) {
         activeFolderId = folders[0].id;

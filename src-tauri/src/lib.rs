@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
 
 // ─── Data Models ────────────────────────────────────────────────
@@ -30,6 +30,12 @@ pub struct Folder {
 pub struct AppData {
     pub folders: Vec<Folder>,
     pub theme: String,
+    #[serde(default = "default_shortcut")]
+    pub shortcut: String,
+}
+
+fn default_shortcut() -> String {
+    "CmdOrCtrl+Shift+S".into()
 }
 
 impl Default for AppData {
@@ -72,6 +78,7 @@ impl Default for AppData {
                 },
             ],
             theme: "dark".into(),
+            shortcut: default_shortcut(),
         }
     }
 }
@@ -433,7 +440,78 @@ fn set_theme(state: State<'_, AppState>, theme: String) -> String {
     theme
 }
 
+// ─── Settings Commands ──────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct Settings {
+    pub shortcut: String,
+    pub theme: String,
+}
+
+#[tauri::command]
+fn get_settings(state: State<'_, AppState>) -> Settings {
+    let data = state.data.lock().unwrap();
+    Settings {
+        shortcut: data.shortcut.clone(),
+        theme: data.theme.clone(),
+    }
+}
+
+#[tauri::command]
+fn set_shortcut(state: State<'_, AppState>, app: AppHandle, shortcut: String) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    // Unregister all existing shortcuts
+    let _ = app.global_shortcut().unregister_all();
+
+    // Register the new shortcut
+    let app_handle = app.clone();
+    let parsed: tauri_plugin_global_shortcut::Shortcut = shortcut.parse().map_err(|e| format!("{:?}", e))?;
+    app.global_shortcut()
+        .on_shortcut(parsed, move |_app, _shortcut, event| {
+            if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                open_quicksave_window(&app_handle);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+
+    // Save to data
+    state.data.lock().unwrap().shortcut = shortcut;
+    state.save();
+    Ok(())
+}
+
+#[tauri::command]
+fn close_quicksave(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("quicksave") {
+        let _ = window.close();
+    }
+}
+
+fn open_quicksave_window(app: &AppHandle) {
+    // If already open, just focus it
+    if let Some(window) = app.get_webview_window("quicksave") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+
+    let _ = WebviewWindowBuilder::new(
+        app,
+        "quicksave",
+        WebviewUrl::App("quicksave.html".into()),
+    )
+    .title("Quick Save")
+    .inner_size(420.0, 380.0)
+    .resizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .center()
+    .build();
+}
+
 // ─── Window Controls ────────────────────────────────────────────
+
 
 #[tauri::command]
 fn window_minimize(app: AppHandle) {
@@ -467,6 +545,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
             let _ = fs::create_dir_all(&app_data_dir);
@@ -477,11 +556,24 @@ pub fn run() {
             let data_path = app_data_dir.join("data.json");
             let data = AppState::load(&data_path);
 
+            let shortcut_str = data.shortcut.clone();
+
             app.manage(AppState {
                 data: Mutex::new(data),
                 data_path,
                 image_dir,
             });
+
+            // Register the global shortcut
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            let app_handle = app.handle().clone();
+            if let Ok(shortcut) = shortcut_str.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        open_quicksave_window(&app_handle);
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -501,6 +593,9 @@ pub fn run() {
             copy_to_clipboard,
             get_theme,
             set_theme,
+            get_settings,
+            set_shortcut,
+            close_quicksave,
             window_minimize,
             window_maximize,
             window_close,
