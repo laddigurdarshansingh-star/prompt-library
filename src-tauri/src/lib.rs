@@ -4,6 +4,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::menu::{Menu, MenuItem};
 use uuid::Uuid;
 
 // ─── Data Models ────────────────────────────────────────────────
@@ -35,7 +37,7 @@ pub struct AppData {
 }
 
 fn default_shortcut() -> String {
-    "CmdOrCtrl+Shift+S".into()
+    "CommandOrControl+Shift+S".into()
 }
 
 impl Default for AppData {
@@ -533,6 +535,14 @@ fn window_maximize(app: AppHandle) {
 
 #[tauri::command]
 fn window_close(app: AppHandle) {
+    // Hide to tray instead of quitting
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+#[tauri::command]
+fn app_quit(app: AppHandle) {
     app.exit(0);
 }
 
@@ -564,7 +574,41 @@ pub fn run() {
                 image_dir,
             });
 
-            // Register the global shortcut
+            // ─── System Tray ───
+            let show_item = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .tooltip("Prompt Library")
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // ─── Global Shortcut ───
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
             let app_handle = app.handle().clone();
             if let Ok(shortcut) = shortcut_str.parse::<tauri_plugin_global_shortcut::Shortcut>() {
@@ -599,6 +643,7 @@ pub fn run() {
             window_minimize,
             window_maximize,
             window_close,
+            app_quit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
