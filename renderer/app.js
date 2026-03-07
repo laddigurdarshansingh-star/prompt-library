@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
-   Prompt Library – Application Logic
+   Prompt Library – Application Logic (Tauri v2)
    ═══════════════════════════════════════════════════════════════ */
+
+const { invoke } = window.__TAURI__.core;
 
 // ─── State ─────────────────────────────────────────────────────
 let folders = [];
@@ -202,7 +204,7 @@ function renderPrompts() {
             e.stopPropagation();
             const prompt = findPrompt(btn.dataset.id);
             if (prompt) {
-                await window.api.copyToClipboard(prompt.text);
+                await invoke('copy_to_clipboard', { text: prompt.text });
                 showToast();
             }
         });
@@ -218,7 +220,7 @@ function renderPrompts() {
     promptGrid.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            folders = await window.api.deletePrompt(activeFolderId, btn.dataset.id);
+            folders = await invoke('delete_prompt', { folderId: activeFolderId, promptId: btn.dataset.id });
             renderFolders();
             renderPrompts();
         });
@@ -265,7 +267,7 @@ function renderImagePreviews() {
 }
 
 async function addImageFromDataUrl(dataUrl) {
-    const result = await window.api.saveImage(dataUrl);
+    const result = await invoke('save_image', { dataUrl });
     if (result) {
         modalImages.push({ filename: result.filename, dataUrl });
         renderImagePreviews();
@@ -332,19 +334,19 @@ async function saveModal() {
         }
 
         if (editingPromptId) {
-            folders = await window.api.updatePrompt(activeFolderId, editingPromptId, name, text, tags, modalImages);
+            folders = await invoke('update_prompt', { folderId: activeFolderId, promptId: editingPromptId, name, text, tags, images: modalImages });
         } else {
-            folders = await window.api.createPrompt(activeFolderId, name, text, tags, modalImages);
+            folders = await invoke('create_prompt', { folderId: activeFolderId, name, text, tags, images: modalImages });
         }
     } else if (modalMode === 'folder') {
         const name = $('#folderName').value.trim();
         if (!name) return;
-        folders = await window.api.createFolder(name);
+        folders = await invoke('create_folder', { name });
         activeFolderId = folders[folders.length - 1].id;
     } else if (modalMode === 'rename') {
         const name = $('#folderName').value.trim();
         if (!name) return;
-        folders = await window.api.renameFolder(contextFolderId, name);
+        folders = await invoke('rename_folder', { id: contextFolderId, name });
     }
 
     closeModal();
@@ -354,7 +356,7 @@ async function saveModal() {
 
 // ─── Image Upload Button ───────────────────────────────────────
 imageUploadBtn.addEventListener('click', async () => {
-    const images = await window.api.selectImages();
+    const images = await invoke('select_images');
     for (const img of images) {
         modalImages.push(img);
     }
@@ -411,8 +413,8 @@ document.addEventListener('paste', async (e) => {
         }
     }
 
-    // Also try Electron clipboard (for screenshots)
-    const result = await window.api.readClipboardImage();
+    // Also try Tauri clipboard (for screenshots)
+    const result = await invoke('read_clipboard_image');
     if (result) {
         e.preventDefault();
         modalImages.push(result);
@@ -442,7 +444,7 @@ $('#ctxRename').addEventListener('click', () => {
 $('#ctxDelete').addEventListener('click', async () => {
     contextMenu.classList.remove('visible');
     if (contextFolderId) {
-        folders = await window.api.deleteFolder(contextFolderId);
+        folders = await invoke('delete_folder', { id: contextFolderId });
         if (activeFolderId === contextFolderId && folders.length > 0) {
             activeFolderId = folders[0].id;
         }
@@ -466,13 +468,13 @@ $('#themeToggle').addEventListener('click', async () => {
     const current = html.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
-    await window.api.setTheme(next);
+    await invoke('set_theme', { theme: next });
 });
 
 // Window controls
-$('#winMinimize').addEventListener('click', () => window.api.minimize());
-$('#winMaximize').addEventListener('click', () => window.api.maximize());
-$('#winClose').addEventListener('click', () => window.api.close());
+$('#winMinimize').addEventListener('click', () => invoke('window_minimize'));
+$('#winMaximize').addEventListener('click', () => invoke('window_maximize'));
+$('#winClose').addEventListener('click', () => invoke('window_close'));
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
@@ -509,8 +511,8 @@ document.addEventListener('keydown', (e) => {
 
 // ─── Init ──────────────────────────────────────────────────────
 async function init() {
-    folders = await window.api.getFolders();
-    const theme = await window.api.getTheme();
+    folders = await invoke('get_folders');
+    const theme = await invoke('get_theme');
     document.documentElement.setAttribute('data-theme', theme || 'dark');
 
     if (folders.length > 0) {

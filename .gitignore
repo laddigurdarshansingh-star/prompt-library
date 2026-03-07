@@ -17,3 +17,6 @@ desktop.ini
 
 # Electron
 *.log
+
+# Tauri
+src-tauri/target/

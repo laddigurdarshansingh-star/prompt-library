@@ -1,0 +1,26 @@
+[package]
+name = "prompt-library"
+version = "1.0.0"
+description = "A clean desktop app to organize and manage your AI prompts"
+authors = ["Leon"]
+edition = "2021"
+
+[lib]
+name = "prompt_library_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+png = "0.17"
