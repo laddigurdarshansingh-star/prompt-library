@@ -41,21 +41,26 @@ async function init() {
         qsFolder.innerHTML = '<option value="">No folders</option>';
     }
 
-    // Auto-focus the prompt text
+    // Auto-focus the prompt text directly
     setTimeout(() => qsText.focus(), 150);
 }
 
 // ─── Save ───────────────────────────────────────────────────────
 async function savePrompt() {
     const folderId = qsFolder.value;
-    const name = qsName.value.trim();
     const text = qsText.value.trim();
+    // Name is optional - auto-generate from text if empty
+    let name = qsName.value.trim();
 
     if (!folderId) return;
-    if (!name || !text) {
-        if (!name) qsName.focus();
-        else qsText.focus();
+    if (!text) {
+        qsText.focus();
         return;
+    }
+
+    if (!name) {
+        name = text.substring(0, 35).replace(/\n/g, ' ');
+        if (text.length > 35) name += '…';
     }
 
     await invoke('create_prompt', {

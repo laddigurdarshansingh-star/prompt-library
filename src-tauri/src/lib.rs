@@ -505,7 +505,7 @@ fn open_quicksave_window(app: &AppHandle) {
         WebviewUrl::App("quicksave.html".into()),
     )
     .title("Quick Save")
-    .inner_size(420.0, 380.0)
+    .inner_size(460.0, 520.0)
     .resizable(false)
     .decorations(false)
     .always_on_top(true)
