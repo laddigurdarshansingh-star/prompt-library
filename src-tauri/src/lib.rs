@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Listener, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::menu::{Menu, MenuItem};
 use uuid::Uuid;
@@ -472,7 +472,8 @@ fn set_shortcut(state: State<'_, AppState>, app: AppHandle, shortcut: String) ->
     app.global_shortcut()
         .on_shortcut(parsed, move |_app, _shortcut, event| {
             if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                open_quicksave_window(&app_handle);
+                // Emit event instead of directly creating window to avoid deadlock
+                let _ = app_handle.emit("open-quicksave", ());
             }
         })
         .map_err(|e| e.to_string())?;
@@ -615,10 +616,17 @@ pub fn run() {
             if let Ok(shortcut) = shortcut_str.parse::<tauri_plugin_global_shortcut::Shortcut>() {
                 let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
                     if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        open_quicksave_window(&app_handle);
+                        // Emit event instead of directly creating window to avoid deadlock
+                        let _ = app_handle.emit("open-quicksave", ());
                     }
                 });
             }
+
+            // Listen for the quicksave event on the main thread
+            let app_handle2 = app.handle().clone();
+            app.listen("open-quicksave", move |_event| {
+                open_quicksave_window(&app_handle2);
+            });
 
             // ─── Autostart: enable and hide on boot ───
             use tauri_plugin_autostart::ManagerExt;
