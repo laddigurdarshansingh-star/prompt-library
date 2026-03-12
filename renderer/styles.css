@@ -1634,3 +1634,216 @@ body {
 .recorder-actions .qs-btn-save:hover {
   background: var(--accent-hover);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Sidebar Header Actions
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Sidebar Collapse / Expand
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar {
+  transition: width var(--transition-slow), min-width var(--transition-slow),
+    opacity var(--transition), background var(--transition-slow),
+    border var(--transition-slow);
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-collapse-btn svg {
+  transition: transform var(--transition);
+}
+
+.sidebar-expand-btn {
+  color: var(--text-tertiary);
+}
+
+.sidebar-expand-btn:hover {
+  color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Active Folder – Accent Bar Indicator
+   ═══════════════════════════════════════════════════════════════ */
+.folder-item.active {
+  background: var(--accent-glow);
+  color: var(--accent-text);
+}
+
+.folder-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--accent);
+  border-radius: 0 3px 3px 0;
+  animation: barSlideIn 0.25s ease-out both;
+}
+
+@keyframes barSlideIn {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: 60%;
+    opacity: 1;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Confirmation Dialog
+   ═══════════════════════════════════════════════════════════════ */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-slow);
+}
+
+.confirm-overlay.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.confirm-dialog {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 32px;
+  width: 340px;
+  max-width: 90vw;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transform: scale(0.9) translateY(16px);
+  transition: transform var(--transition-bounce);
+  box-shadow: var(--shadow-elevated);
+}
+
+[data-theme="light"] .confirm-dialog {
+  border-color: transparent;
+}
+
+.confirm-overlay.active .confirm-dialog {
+  transform: scale(1) translateY(0);
+}
+
+.confirm-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--danger-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-icon svg {
+  width: 24px;
+  height: 24px;
+  color: var(--danger);
+}
+
+.confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.confirm-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.confirm-actions .btn-secondary,
+.confirm-actions .btn-danger {
+  flex: 1;
+}
+
+.btn-danger {
+  padding: 10px 20px;
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-danger:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(229, 91, 91, 0.3);
+}
+
+.btn-danger:active {
+  transform: scale(0.97);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Card Delete Animation
+   ═══════════════════════════════════════════════════════════════ */
+.prompt-card.card-removing {
+  animation: cardOut 0.35s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes cardOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85) translateY(10px);
+    margin-top: -20px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Card Date
+   ═══════════════════════════════════════════════════════════════ */
+.card-date {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}

@@ -3,13 +3,13 @@
 ---
 
 ## Update 1 · Core Polish
-- [ ] Sidebar Collapse Button (ein-/ausklappen)
-- [ ] Active Folder Indicator (Accent-Bar links statt nur Background)
-- [ ] Confirmation Dialog beim Löschen von Prompts & Folders
-- [ ] Double-Click to Edit auf Prompt Cards
-- [ ] Staggered Card Animations (Karten erscheinen nacheinander)
-- [ ] Delete-Animation (Card Shrink + Fade Out)
-- [ ] Relative Datums-Anzeige ("vor 2h" statt fixes Datum)
+- [x] Sidebar Collapse Button (ein-/ausklappen)
+- [x] Active Folder Indicator (Accent-Bar links statt nur Background)
+- [x] Confirmation Dialog beim Löschen von Prompts & Folders
+- [x] Double-Click to Edit auf Prompt Cards
+- [x] Staggered Card Animations (Karten erscheinen nacheinander)
+- [x] Delete-Animation (Card Shrink + Fade Out)
+- [x] Relative Datums-Anzeige ("vor 2h" statt fixes Datum)
 
 ## Update 2 · Productivity
 - [ ] Keyboard Shortcuts — `Ctrl+N` New Prompt, `Ctrl+F` Focus Search

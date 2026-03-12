@@ -49,6 +49,14 @@ const toastMessage = $('#toastMessage');
 const lightboxOverlay = $('#lightboxOverlay');
 const lightboxImg = $('#lightboxImg');
 const lightboxClose = $('#lightboxClose');
+const sidebar = $('#sidebar');
+const sidebarCollapseBtn = $('#sidebarCollapseBtn');
+const sidebarExpandBtn = $('#sidebarExpandBtn');
+const confirmOverlay = $('#confirmOverlay');
+const confirmTitle = $('#confirmTitle');
+const confirmDesc = $('#confirmDesc');
+const confirmOk = $('#confirmOk');
+const confirmCancel = $('#confirmCancel');
 
 // ─── Helpers ───────────────────────────────────────────────────
 function escapeHtml(str) {
@@ -58,12 +66,17 @@ function escapeHtml(str) {
 }
 
 function formatDate(iso) {
+    if (!iso) return '';
     const d = new Date(iso);
     const now = new Date();
     const diff = now - d;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) {
+        const m = Math.floor(diff / 60000);
+        return `${m}m ago`;
+    }
     if (diff < 86400000) {
         const h = Math.floor(diff / 3600000);
-        if (h < 1) return 'Just now';
         return `${h}h ago`;
     }
     if (diff < 604800000) {
@@ -78,6 +91,49 @@ function showToast(message = 'Copied to clipboard!') {
     toast.classList.add('visible');
     setTimeout(() => toast.classList.remove('visible'), 2200);
 }
+
+// ─── Confirmation Dialog ───────────────────────────────────────
+let confirmResolve = null;
+
+function showConfirm(title, desc) {
+    confirmTitle.textContent = title;
+    confirmDesc.textContent = desc;
+    confirmOverlay.classList.add('active');
+    return new Promise((resolve) => {
+        confirmResolve = resolve;
+    });
+}
+
+confirmOk.addEventListener('click', () => {
+    confirmOverlay.classList.remove('active');
+    if (confirmResolve) confirmResolve(true);
+    confirmResolve = null;
+});
+
+confirmCancel.addEventListener('click', () => {
+    confirmOverlay.classList.remove('active');
+    if (confirmResolve) confirmResolve(false);
+    confirmResolve = null;
+});
+
+confirmOverlay.addEventListener('click', (e) => {
+    if (e.target === confirmOverlay) {
+        confirmOverlay.classList.remove('active');
+        if (confirmResolve) confirmResolve(false);
+        confirmResolve = null;
+    }
+});
+
+// ─── Sidebar Collapse / Expand ─────────────────────────────────
+sidebarCollapseBtn.addEventListener('click', () => {
+    sidebar.classList.add('collapsed');
+    sidebarExpandBtn.style.display = 'flex';
+});
+
+sidebarExpandBtn.addEventListener('click', () => {
+    sidebar.classList.remove('collapsed');
+    sidebarExpandBtn.style.display = 'none';
+});
 
 // ─── Lightbox ──────────────────────────────────────────────────
 function openLightbox(src) {
@@ -168,8 +224,12 @@ function renderPrompts() {
             }).join('')}</div>`
             : '';
 
+        const dateHtml = p.updated_at || p.created_at
+            ? `<span class="card-date">${formatDate(p.updated_at || p.created_at)}</span>`
+            : '';
+
         return `
-      <div class="prompt-card" data-id="${p.id}" style="animation-delay: ${i * 0.04}s">
+      <div class="prompt-card" data-id="${p.id}" style="animation-delay: ${i * 0.06}s">
         <div class="card-header">
           <span class="card-name">${escapeHtml(p.name)}</span>
           <div class="card-actions">
@@ -197,6 +257,7 @@ function renderPrompts() {
         ${imagesHtml}
         <div class="card-footer">
           <div class="card-tags">${tagsHtml}</div>
+          ${dateHtml}
           <button class="card-copy-main" data-id="${p.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -228,12 +289,39 @@ function renderPrompts() {
         });
     });
 
+    // Delete with confirmation + animation
     promptGrid.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            folders = await invoke('delete_prompt', { folderId: activeFolderId, promptId: btn.dataset.id });
+            const promptId = btn.dataset.id;
+            const prompt = findPrompt(promptId);
+            const name = prompt ? prompt.name : 'this prompt';
+
+            const confirmed = await showConfirm(
+                `Delete "${name}"?`,
+                'This prompt will be permanently removed.'
+            );
+            if (!confirmed) return;
+
+            // Animate out
+            const card = btn.closest('.prompt-card');
+            if (card) {
+                card.classList.add('card-removing');
+                await new Promise(r => setTimeout(r, 320));
+            }
+
+            folders = await invoke('delete_prompt', { folderId: activeFolderId, promptId });
             renderFolders();
             renderPrompts();
+        });
+    });
+
+    // Double-click to edit
+    promptGrid.querySelectorAll('.prompt-card').forEach(card => {
+        card.addEventListener('dblclick', (e) => {
+            // Don't trigger if clicking buttons or images
+            if (e.target.closest('.card-btn, .card-copy-main, .card-image-thumb')) return;
+            openPromptModal(card.dataset.id);
         });
     });
 
@@ -452,16 +540,29 @@ $('#ctxRename').addEventListener('click', () => {
     contextMenu.classList.remove('visible');
 });
 
+// Delete folder with confirmation
 $('#ctxDelete').addEventListener('click', async () => {
     contextMenu.classList.remove('visible');
-    if (contextFolderId) {
-        folders = await invoke('delete_folder', { id: contextFolderId });
-        if (activeFolderId === contextFolderId && folders.length > 0) {
-            activeFolderId = folders[0].id;
-        }
-        renderFolders();
-        renderPrompts();
+    if (!contextFolderId) return;
+
+    const folder = folders.find(f => f.id === contextFolderId);
+    const name = folder ? folder.name : 'this folder';
+    const count = folder ? folder.prompts.length : 0;
+
+    const confirmed = await showConfirm(
+        `Delete "${name}"?`,
+        count > 0
+            ? `This folder contains ${count} prompt${count !== 1 ? 's' : ''} that will also be deleted.`
+            : 'This empty folder will be permanently removed.'
+    );
+    if (!confirmed) return;
+
+    folders = await invoke('delete_folder', { id: contextFolderId });
+    if (activeFolderId === contextFolderId && folders.length > 0) {
+        activeFolderId = folders[0].id;
     }
+    renderFolders();
+    renderPrompts();
 });
 
 document.addEventListener('click', () => {
@@ -590,7 +691,11 @@ document.addEventListener('keydown', (e) => {
 
     // Escape closes overlays
     if (e.key === 'Escape') {
-        if (settingsOverlay.classList.contains('active')) {
+        if (confirmOverlay.classList.contains('active')) {
+            confirmOverlay.classList.remove('active');
+            if (confirmResolve) confirmResolve(false);
+            confirmResolve = null;
+        } else if (settingsOverlay.classList.contains('active')) {
             settingsOverlay.classList.remove('active');
             stopRecording();
         } else if (lightboxOverlay.classList.contains('active')) {
@@ -619,6 +724,18 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         searchInput.focus();
+    }
+
+    // Ctrl+B → toggle sidebar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        if (sidebar.classList.contains('collapsed')) {
+            sidebar.classList.remove('collapsed');
+            sidebarExpandBtn.style.display = 'none';
+        } else {
+            sidebar.classList.add('collapsed');
+            sidebarExpandBtn.style.display = 'flex';
+        }
     }
 });
 
