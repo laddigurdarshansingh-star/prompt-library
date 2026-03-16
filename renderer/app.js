@@ -286,8 +286,7 @@ function renderPrompts() {
 
         const imagesHtml = (p.images && p.images.length > 0)
             ? `<div class="card-images">${p.images.map((img, idx) => {
-                const src = typeof img === 'string' ? img : (img.dataUrl || '');
-                return `<img class="card-image-thumb" src="${src}" data-prompt-id="${p.id}" data-img-idx="${idx}" alt="Image ${idx + 1}">`;
+                return `<img class="card-image-thumb" src="" data-filename="${img}" data-prompt-id="${p.id}" data-img-idx="${idx}" alt="Image ${idx + 1}">`;
             }).join('')}</div>`
             : '';
 
@@ -423,8 +422,17 @@ function renderPrompts() {
         card.addEventListener('dragend', () => card.classList.remove('dragging'));
     });
 
-    // Card image click → lightbox
-    promptGrid.querySelectorAll('.card-image-thumb').forEach(img => {
+    // Load images from filenames and setup lightbox
+    promptGrid.querySelectorAll('.card-image-thumb').forEach(async (img) => {
+        const filename = img.dataset.filename;
+        if (filename) {
+            if (filename.startsWith('data:')) {
+                img.src = filename;
+            } else {
+                const path = await invoke('get_image_path', { filename });
+                if (path) img.src = 'asset://localhost/' + path.replace(/\\/g, '/');
+            }
+        }
         img.addEventListener('click', (e) => {
             e.stopPropagation();
             openLightbox(img.src);
@@ -464,7 +472,7 @@ function sortPrompts(prompts, mode) {
 // ─── Image Preview Management ──────────────────────────────────
 function renderImagePreviews() {
     imagePreviewList.innerHTML = modalImages.map((img, idx) => {
-        const src = typeof img === 'string' ? img : (img.dataUrl || '');
+        const src = img._previewUrl || '';
         return `
     <div class="image-preview-item" data-idx="${idx}">
       <img src="${src}" alt="Preview ${idx + 1}">
@@ -492,7 +500,7 @@ function renderImagePreviews() {
 async function addImageFromDataUrl(dataUrl) {
     const result = await invoke('save_image', { dataUrl });
     if (result) {
-        modalImages.push(dataUrl);
+        modalImages.push({ filename: result.filename, _previewUrl: dataUrl });
         renderImagePreviews();
     }
 }
@@ -500,7 +508,7 @@ async function addImageFromDataUrl(dataUrl) {
 // ─── Modal ─────────────────────────────────────────────────────
 let modalMode = 'prompt'; // 'prompt' | 'folder' | 'rename'
 
-function openPromptModal(promptId = null) {
+async function openPromptModal(promptId = null) {
     modalMode = 'prompt';
     editingPromptId = promptId;
     promptForm.style.display = 'flex';
@@ -513,7 +521,18 @@ function openPromptModal(promptId = null) {
             promptName.value = prompt.name;
             promptText.value = prompt.text;
             promptTags.value = (prompt.tags || []).join(', ');
-            modalImages = (prompt.images || []).slice();
+            // Load images: each is a filename string, resolve for preview
+            modalImages = [];
+            for (const img of (prompt.images || [])) {
+                const filename = typeof img === 'string' ? img : img.filename;
+                if (filename && filename.startsWith('data:')) {
+                    modalImages.push({ filename, _previewUrl: filename });
+                } else if (filename) {
+                    const path = await invoke('get_image_path', { filename });
+                    const previewUrl = path ? 'asset://localhost/' + path.replace(/\\/g, '/') : '';
+                    modalImages.push({ filename, _previewUrl: previewUrl });
+                }
+            }
         }
     } else {
         modalTitle.textContent = 'New Prompt';
@@ -557,13 +576,13 @@ async function saveModal() {
             return;
         }
 
-        // modalImages can contain {dataUrl, filename} objects or plain strings
-        const imageStrings = modalImages.map(img => typeof img === 'string' ? img : (img.dataUrl || img));
+        // Extract filenames for storage (not dataUrls)
+        const imageFilenames = modalImages.map(img => typeof img === 'string' ? img : (img.filename || img));
 
         if (editingPromptId) {
-            folders = await invoke('update_prompt', { folderId: activeFolderId, promptId: editingPromptId, name, text, tags, images: imageStrings });
+            folders = await invoke('update_prompt', { folderId: activeFolderId, promptId: editingPromptId, name, text, tags, images: imageFilenames });
         } else {
-            folders = await invoke('create_prompt', { folderId: activeFolderId, name, text, tags, images: imageStrings });
+            folders = await invoke('create_prompt', { folderId: activeFolderId, name, text, tags, images: imageFilenames });
         }
     } else if (modalMode === 'folder') {
         const name = $('#folderName').value.trim();
@@ -585,7 +604,7 @@ async function saveModal() {
 imageUploadBtn.addEventListener('click', async () => {
     const images = await invoke('select_images');
     for (const img of images) {
-        modalImages.push(img);
+        modalImages.push({ filename: img.filename, _previewUrl: img.data_url });
     }
     renderImagePreviews();
 });
@@ -644,7 +663,7 @@ document.addEventListener('paste', async (e) => {
     const result = await invoke('read_clipboard_image');
     if (result) {
         e.preventDefault();
-        modalImages.push(result);
+        modalImages.push({ filename: result.filename || result, _previewUrl: result.data_url || result });
         renderImagePreviews();
         showToast('Image pasted!');
     }
@@ -921,6 +940,15 @@ async function init() {
 
     renderFolders();
     renderPrompts();
+
+    // Listen for data changes from Quick Save window
+    if (window.__TAURI__ && window.__TAURI__.event) {
+        window.__TAURI__.event.listen('folders-changed', async () => {
+            folders = await invoke('get_folders');
+            renderFolders();
+            renderPrompts();
+        });
+    }
 }
 
 init();

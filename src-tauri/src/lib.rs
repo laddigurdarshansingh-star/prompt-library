@@ -497,6 +497,8 @@ fn set_shortcut(state: State<'_, AppState>, app: AppHandle, shortcut: String) ->
 
 #[tauri::command]
 fn close_quicksave(app: AppHandle) {
+    // Notify the main window to refresh its data
+    let _ = app.emit("folders-changed", ());
     if let Some(window) = app.get_webview_window("quicksave") {
         let _ = window.close();
     }
