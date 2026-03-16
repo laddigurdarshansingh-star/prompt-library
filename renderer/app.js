@@ -286,7 +286,7 @@ function renderPrompts() {
 
         const imagesHtml = (p.images && p.images.length > 0)
             ? `<div class="card-images">${p.images.map((img, idx) => {
-                const src = img.dataUrl || '';
+                const src = typeof img === 'string' ? img : (img.dataUrl || '');
                 return `<img class="card-image-thumb" src="${src}" data-prompt-id="${p.id}" data-img-idx="${idx}" alt="Image ${idx + 1}">`;
             }).join('')}</div>`
             : '';
@@ -463,12 +463,15 @@ function sortPrompts(prompts, mode) {
 
 // ─── Image Preview Management ──────────────────────────────────
 function renderImagePreviews() {
-    imagePreviewList.innerHTML = modalImages.map((img, idx) => `
+    imagePreviewList.innerHTML = modalImages.map((img, idx) => {
+        const src = typeof img === 'string' ? img : (img.dataUrl || '');
+        return `
     <div class="image-preview-item" data-idx="${idx}">
-      <img src="${img.dataUrl}" alt="Preview ${idx + 1}">
+      <img src="${src}" alt="Preview ${idx + 1}">
       <button class="image-preview-remove" data-idx="${idx}">×</button>
     </div>
-  `).join('');
+  `;
+    }).join('');
 
     // Click to preview
     imagePreviewList.querySelectorAll('.image-preview-item img').forEach(imgEl => {
@@ -489,7 +492,7 @@ function renderImagePreviews() {
 async function addImageFromDataUrl(dataUrl) {
     const result = await invoke('save_image', { dataUrl });
     if (result) {
-        modalImages.push({ filename: result.filename, dataUrl });
+        modalImages.push(dataUrl);
         renderImagePreviews();
     }
 }
@@ -510,7 +513,7 @@ function openPromptModal(promptId = null) {
             promptName.value = prompt.name;
             promptText.value = prompt.text;
             promptTags.value = (prompt.tags || []).join(', ');
-            modalImages = (prompt.images || []).map(img => ({ ...img }));
+            modalImages = (prompt.images || []).slice();
         }
     } else {
         modalTitle.textContent = 'New Prompt';
