@@ -3,14 +3,13 @@
    ═══════════════════════════════════════════════════════════════ */
 
 async function invoke(cmd, args) {
-    if (window.__TAURI__ && window.__TAURI__.core) {
-        return window.__TAURI__.core.invoke(cmd, args);
+    for (let i = 0; i < 20; i++) {
+        if (window.__TAURI__ && window.__TAURI__.core) {
+            return window.__TAURI__.core.invoke(cmd, args);
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
-    if (window.__TAURI__ && window.__TAURI__.core) {
-        return window.__TAURI__.core.invoke(cmd, args);
-    }
-    console.error('Tauri API not available');
+    console.error('Tauri API not available for command:', cmd);
     return null;
 }
 

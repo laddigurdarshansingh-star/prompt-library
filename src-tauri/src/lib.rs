@@ -17,7 +17,8 @@ pub struct Prompt {
     pub text: String,
     pub tags: Vec<String>,
     pub images: Vec<String>,
-    #[serde(rename = "createdAt")]
+    #[serde(alias = "createdAt", rename(serialize = "created_at", deserialize = "created_at"))]
+    #[serde(default)]
     pub created_at: String,
     #[serde(default)]
     pub favorite: bool,
@@ -95,12 +96,7 @@ impl Default for AppData {
 }
 
 fn chrono_now() -> String {
-    // Simple ISO timestamp without chrono dependency
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    format!("2026-01-01T00:00:{}Z", now % 86400)
+    now_iso()
 }
 
 fn gen_id() -> String {
@@ -108,23 +104,45 @@ fn gen_id() -> String {
 }
 
 fn now_iso() -> String {
-    // We'll use a simple approach
     let d = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap();
-    let secs = d.as_secs();
-    let days = secs / 86400;
-    let rem = secs % 86400;
-    let hours = rem / 3600;
-    let minutes = (rem % 3600) / 60;
-    let seconds = rem % 60;
-    // Approximate date from epoch
+    let total_secs = d.as_secs();
+    
+    // Calculate actual date from epoch seconds
+    let secs_per_day: u64 = 86400;
+    let mut remaining_days = (total_secs / secs_per_day) as i64;
+    let time_secs = total_secs % secs_per_day;
+    let hours = time_secs / 3600;
+    let minutes = (time_secs % 3600) / 60;
+    let seconds = time_secs % 60;
+    
+    // Start from 1970-01-01
+    let mut year: i64 = 1970;
+    loop {
+        let days_in_year = if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 { 366 } else { 365 };
+        if remaining_days < days_in_year {
+            break;
+        }
+        remaining_days -= days_in_year;
+        year += 1;
+    }
+    
+    let is_leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let days_in_months = [31, if is_leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut month: usize = 0;
+    for (i, &dim) in days_in_months.iter().enumerate() {
+        if remaining_days < dim as i64 {
+            month = i;
+            break;
+        }
+        remaining_days -= dim as i64;
+    }
+    let day = remaining_days + 1;
+    
     format!(
-        "1970-01-{:02}T{:02}:{:02}:{:02}Z",
-        days % 28 + 1,
-        hours,
-        minutes,
-        seconds
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        year, month + 1, day, hours, minutes, seconds
     )
 }
 
@@ -295,7 +313,6 @@ fn move_prompt(
 #[derive(Serialize)]
 pub struct ImageResult {
     pub filename: String,
-    #[serde(rename = "dataUrl")]
     pub data_url: String,
 }
 

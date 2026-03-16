@@ -3,16 +3,27 @@
    ═══════════════════════════════════════════════════════════════ */
 
 async function invoke(cmd, args) {
-    if (window.__TAURI__ && window.__TAURI__.core) {
-        return window.__TAURI__.core.invoke(cmd, args);
+    // Wait for Tauri to be ready (up to 2 seconds)
+    for (let i = 0; i < 20; i++) {
+        if (window.__TAURI__ && window.__TAURI__.core) {
+            return window.__TAURI__.core.invoke(cmd, args);
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
-    // Retry after a short delay if Tauri isn't ready yet
-    await new Promise(resolve => setTimeout(resolve, 100));
-    if (window.__TAURI__ && window.__TAURI__.core) {
-        return window.__TAURI__.core.invoke(cmd, args);
-    }
-    console.error('Tauri API not available');
+    console.error('Tauri API not available for command:', cmd);
     return null;
+}
+
+// Helper to convert a local file path to a URL the webview can load
+function filePathToUrl(filePath) {
+    if (!filePath) return '';
+    // Tauri v2: use convertFileSrc if available, otherwise use asset:// protocol
+    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
+        return window.__TAURI__.core.convertFileSrc(filePath);
+    }
+    // Fallback: convert path to asset:// URL
+    const normalized = filePath.replace(/\\/g, '/');
+    return 'asset://localhost/' + normalized;
 }
 
 // ─── State ─────────────────────────────────────────────────────
@@ -430,7 +441,7 @@ function renderPrompts() {
                 img.src = filename;
             } else {
                 const path = await invoke('get_image_path', { filename });
-                if (path) img.src = 'asset://localhost/' + path.replace(/\\/g, '/');
+                if (path) img.src = filePathToUrl(path);
             }
         }
         img.addEventListener('click', (e) => {
@@ -499,7 +510,7 @@ function renderImagePreviews() {
 
 async function addImageFromDataUrl(dataUrl) {
     const result = await invoke('save_image', { dataUrl });
-    if (result) {
+    if (result && result.filename) {
         modalImages.push({ filename: result.filename, _previewUrl: dataUrl });
         renderImagePreviews();
     }
@@ -529,7 +540,7 @@ async function openPromptModal(promptId = null) {
                     modalImages.push({ filename, _previewUrl: filename });
                 } else if (filename) {
                     const path = await invoke('get_image_path', { filename });
-                    const previewUrl = path ? 'asset://localhost/' + path.replace(/\\/g, '/') : '';
+                    const previewUrl = path ? filePathToUrl(path) : '';
                     modalImages.push({ filename, _previewUrl: previewUrl });
                 }
             }
@@ -602,11 +613,15 @@ async function saveModal() {
 
 // ─── Image Upload Button ───────────────────────────────────────
 imageUploadBtn.addEventListener('click', async () => {
-    const images = await invoke('select_images');
-    for (const img of images) {
-        modalImages.push({ filename: img.filename, _previewUrl: img.data_url });
+    const result = await invoke('select_images');
+    if (result && Array.isArray(result)) {
+        for (const img of result) {
+            if (img && img.filename) {
+                modalImages.push({ filename: img.filename, _previewUrl: img.data_url || '' });
+            }
+        }
+        renderImagePreviews();
     }
-    renderImagePreviews();
 });
 
 // ─── Drag & Drop on upload zone ────────────────────────────────
@@ -661,9 +676,9 @@ document.addEventListener('paste', async (e) => {
 
     // Also try Tauri clipboard (for screenshots)
     const result = await invoke('read_clipboard_image');
-    if (result) {
+    if (result && result.filename) {
         e.preventDefault();
-        modalImages.push({ filename: result.filename || result, _previewUrl: result.data_url || result });
+        modalImages.push({ filename: result.filename, _previewUrl: result.data_url || '' });
         renderImagePreviews();
         showToast('Image pasted!');
     }
